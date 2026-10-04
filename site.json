@@ -1,0 +1,16 @@
+{
+  "name": "LeLiz",
+  "url": "https://holly229567.github.io",
+  "github": "https://github.com/Holly229567",
+  "repository": "Holly229567/holly229567.github.io",
+  "description": "数学建模与开源实践。记录项目、研究和学习笔记。",
+  "experience": [],
+  "publications": [],
+  "projects": [{
+    "name": "Math Modeling Skills",
+    "repository": "Math_Modeling_Skills_229",
+    "description": "面向数学建模竞赛的 Codex 技能套件，连接题目拆解、模型探索、Python 实现、论文写作与独立验证。",
+    "language": "Python",
+    "url": "https://github.com/Holly229567/Math_Modeling_Skills_229"
+  }]
+}
