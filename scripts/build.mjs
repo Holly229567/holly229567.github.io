@@ -21,6 +21,7 @@ function parsePost(file){
   if(!['随笔','研究','开发'].includes(meta.category))throw new Error('Invalid category: '+file);
   return {...meta,slug,body:match[2],html:markdown.render(match[2])};
 }
+fs.mkdirSync('content/posts',{recursive:true});
 const allPosts=fs.readdirSync('content/posts').filter(file=>file.endsWith('.md')).map(parsePost);
 const posts=allPosts.filter(post=>post.draft!==true).sort((a,b)=>b.date.localeCompare(a.date)||a.slug.localeCompare(b.slug));
 const icon=(type)=>{const paths={moon:'<path d="M20.9 13A9 9 0 0 1 11 3.1 9 9 0 1 0 20.9 13Z"/>',sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',menu:'<path d="M4 6h16M4 12h16M4 18h16"/>',code:'<path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18"/>',search:'<circle cx="10.5" cy="10.5" r="7.5"/><path d="m16 16 6 6"/>'};return `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[type]}</svg>`;};
