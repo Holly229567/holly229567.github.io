@@ -4,13 +4,16 @@
   "repository": "Holly229567/holly229567.github.io",
   "profile": {
     "name": "Andrew Zhou",
-    "title": "",
-    "institution": "",
-    "email": "",
-    "location": "",
-    "avatar": "",
-    "interests": [],
-    "github": "",
+    "title": "Undergraduate",
+    "institution": "Xi'an Jiaotong University",
+    "email": "zhouzq229567for@gmail.com",
+    "location": "Earth",
+    "avatar": "/uploads/159d3aee-d676-4fe4-965f-4515d04eb205.jpg",
+    "interests": [
+      "Embodied AI",
+      "To save lives"
+    ],
+    "github": "https://github.com/Holly229567",
     "scholar": "",
     "orcid": "",
     "linkedin": "",
@@ -47,6 +50,14 @@
   "services": [],
   "posts": [],
   "pages": [],
-  "media": [],
-  "updatedAt": "2026-10-12T13:59:18.921Z"
+  "media": [
+    {
+      "id": "6029a3b5-d721-41ab-9286-0e6afe6dff7b",
+      "label": "柳志敏头像.jpg",
+      "url": "/uploads/159d3aee-d676-4fe4-965f-4515d04eb205.jpg",
+      "type": "image/jpeg",
+      "size": 167852
+    }
+  ],
+  "updatedAt": "2026-10-12T14:47:04.361Z"
 }
