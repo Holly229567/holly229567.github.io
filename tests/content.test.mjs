@@ -1,0 +1,34 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import MarkdownIt from 'markdown-it';
+import texmath from 'markdown-it-texmath';
+import katex from 'katex';
+import {COLLECTIONS,emptySite,newRecord,validateSite,validateUploads} from '../src/content-model.mjs';
+import {renderSite} from '../src/render.mjs';
+import {GitHubStore} from '../src/github-store.mjs';
+import {bibtexText} from '../src/bibtex-text.mjs';
+const md=new MarkdownIt({html:false}).use(texmath,{engine:katex,delimiters:['dollars','brackets'],katexOptions:{throwOnError:true,trust:false}});
+test('default content starts empty with the requested name',()=>{const state=emptySite();validateSite(state);assert.equal(state.profile.name,'Andrew Zhou');for(const key of Object.keys(COLLECTIONS))assert.equal(state[key].length,0);assert.equal(state.media.length,0);assert.equal(state.profile.about,'');});
+test('BibTeX formatting preserves equations while removing capitalization braces',()=>{const title=bibtexText('{A} result for $\\frac{a}{b}$ and \\textit{theory}');assert.equal(title,'A result for $\\frac{a}{b}$ and *theory*');assert(md.renderInline(title).includes('class="katex"'));});
+test('all content collections render with working add routes',()=>{const state=emptySite();for(const key of ['home','publications','projects','blog','cv','news','experience','teaching','awards','services']){const page=renderSite(state,key,md);assert(page.html.includes('/admin/?section='));assert(!page.html.includes('LeLiz'));assert(!page.html.includes('Jiale Liu'));}});
+test('inline equations and matrices render in content and publication titles',()=>{const state=emptySite();state.profile.about='Inline $x^2+y^2=1$.\n\n$$\\begin{bmatrix}1&0\\\\0&1\\end{bmatrix}$$';state.publications.push({...newRecord('publications'),title:'A result for $S_n$',type:'journal',featured:true});const page=renderSite(state,'home',md);assert.equal((page.html.match(/class="katex"/g)||[]).length,3);assert(!page.html.includes('class="katex-error"'));});
+test('markdown and labels cannot inject executable HTML',()=>{const state=emptySite();state.profile.about='<script>alert(1)</script>';state.profile.name='<img src=x onerror=alert(1)>';const page=renderSite(state,'home',md);assert(!page.html.includes('<script>'));assert(!page.html.includes('<img src=x'));assert(page.html.includes('&lt;script&gt;'));});
+test('hidden articles do not receive a public blog listing',()=>{const state=emptySite();state.posts.push({...newRecord('posts'),title:'Hidden test article',slug:'hidden-test',content:'Test body',visible:false});assert(!renderSite(state,'blog',md).html.includes('Hidden test article'));});
+test('invalid URLs, duplicate routes and unsupported upload paths are rejected',()=>{const state=emptySite();state.profile.github='javascript:alert(1)';assert.throws(()=>validateSite(state));state.profile.github='';state.pages.push({...newRecord('pages'),title:'Test',slug:'admin'});assert.throws(()=>validateSite(state));assert.throws(()=>validateUploads([{path:'.github/workflows/inject.yml',content:'eA=='}]));assert.throws(()=>validateUploads([{path:'public/uploads/../test.png',content:'eA=='}]));});
+function mockStore(current='old-blob'){
+  const calls=[];const fetcher=async(url,options)=>{const endpoint=url.replace('https://api.github.com/repos/Holly229567/holly229567.github.io','');const data=options.body?JSON.parse(options.body):undefined;calls.push({endpoint,method:options.method,data});let result;
+    if(endpoint==='/git/ref/heads/main')result={object:{sha:'head-with-other-changes'}};
+    else if(endpoint==='/git/commits/head-with-other-changes')result={tree:{sha:'current-tree'}};
+    else if(endpoint==='/git/trees/current-tree')result={tree:[{path:'site.json',sha:current},{path:'README.md',sha:'other-content'}]};
+    else if(endpoint==='/git/blobs')result={sha:data.encoding==='utf-8'?'new-site-blob':'image-blob'};
+    else if(endpoint==='/git/trees')result={sha:'new-tree'};
+    else if(endpoint==='/git/commits')result={sha:'new-commit'};
+    else if(endpoint==='/git/refs/heads/main')result={object:{sha:'new-commit'}};
+    else throw new Error('Unexpected endpoint '+endpoint);
+    return Response.json(result);
+  };return {store:new GitHubStore('not-a-real-token',{fetcher}),calls};
+}
+test('publishing content and media is one atomic, non-forced commit preserving other files',async()=>{const {store,calls}=mockStore();const state=emptySite();const result=await store.publish({state,baseSha:'old-blob',files:[{path:'public/uploads/test-image.png',content:'eA=='}]});assert.equal(result.baseSha,'new-site-blob');const tree=calls.find(call=>call.endpoint==='/git/trees'&&call.method==='POST');assert.equal(tree.data.base_tree,'current-tree');assert.deepEqual(tree.data.tree.map(entry=>entry.path),['public/uploads/test-image.png','site.json']);const ref=calls.find(call=>call.endpoint==='/git/refs/heads/main');assert.equal(ref.data.force,false);const commit=calls.find(call=>call.endpoint==='/git/commits');assert.deepEqual(commit.data.parents,['head-with-other-changes']);});
+test('stale content fails before any write or uploaded blob',async()=>{const {store,calls}=mockStore('someone-else-updated');await assert.rejects(store.publish({state:emptySite(),baseSha:'old-blob'}),error=>error.status===409);assert(calls.every(call=>call.method==='GET'));});
+test('permission failures preserve the client data and return a useful message',async()=>{const source=emptySite(),before=JSON.stringify(source);const store=new GitHubStore('not-a-real-token',{fetcher:async()=>Response.json({message:'Forbidden'},{status:403})});await assert.rejects(store.publish({state:source,baseSha:'old-blob'}),/权限/);assert.equal(JSON.stringify(source),before);});

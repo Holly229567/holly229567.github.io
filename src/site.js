@@ -1,15 +1,11 @@
 (() => {
-  const root=document.documentElement;
-  const themeButton=document.querySelector('.theme-toggle');
-  function updateTheme(){themeButton?.setAttribute('aria-label',root.dataset.theme==='dark'?'切换浅色主题':'切换深色主题');}
-  updateTheme();
-  themeButton?.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('leliz-pages-theme',root.dataset.theme);}catch{}updateTheme();});
-  const menu=document.querySelector('.menu-toggle'),navigation=document.getElementById('navigation');
-  menu?.addEventListener('click',()=>{const expanded=menu.getAttribute('aria-expanded')!=='true';menu.setAttribute('aria-expanded',String(expanded));navigation.classList.toggle('open',expanded);});
-  navigation?.querySelectorAll('a').forEach(link=>link.addEventListener('click',()=>{navigation.classList.remove('open');menu?.setAttribute('aria-expanded','false');}));
-  const filters=[...document.querySelectorAll('[data-category-filter]')];
-  const search=document.getElementById('article-search');
-  let category=new URLSearchParams(location.search).get('category')||'全部';if(!['全部','研究','开发','随笔'].includes(category))category='全部';
-  function filterArticles(){let count=0;const query=(search?.value||'').trim().toLowerCase();document.querySelectorAll('.article-row').forEach(row=>{const match=(category==='全部'||row.dataset.category===category)&&(row.dataset.search||'').toLowerCase().includes(query);row.hidden=!match;if(match)count++;});filters.forEach(button=>button.setAttribute('aria-pressed',String(button.dataset.categoryFilter===category)));const empty=document.getElementById('no-results');if(empty)empty.hidden=count>0;}
-  filters.forEach(button=>button.addEventListener('click',()=>{category=button.dataset.categoryFilter;filterArticles();}));search?.addEventListener('input',filterArticles);if(filters.length)filterArticles();
+  const root=document.documentElement,button=document.querySelector('.theme-toggle');
+  try{root.dataset.theme=localStorage.getItem('andrew-theme')||root.dataset.theme;}catch{}
+  button?.addEventListener('click',()=>{root.dataset.theme=root.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('andrew-theme',root.dataset.theme);}catch{}});
+  const toggle=document.querySelector('.nav-toggle'),nav=document.getElementById('site-nav');
+  toggle?.addEventListener('click',()=>{const expanded=toggle.getAttribute('aria-expanded')!=='true';toggle.setAttribute('aria-expanded',String(expanded));nav.classList.toggle('open',expanded);});
+  const search=document.getElementById('publication-search'),year=document.getElementById('publication-year'),type=document.getElementById('publication-type');
+  function filter(){let count=0;document.querySelectorAll('[data-filter-item]').forEach(item=>{const visible=(!year.value||item.dataset.year===year.value)&&(!type.value||item.dataset.type===type.value)&&item.dataset.search.toLowerCase().includes(search.value.toLowerCase());item.hidden=!visible;if(visible)count++;});document.getElementById('filter-empty').hidden=count>0;}
+  if(search)for(const element of [search,year,type])element.addEventListener('input',filter);
+  document.querySelectorAll('.citation-button').forEach(button=>button.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(button.dataset.citation);button.textContent='已复制';}catch{const dialog=document.createElement('dialog');const area=document.createElement('textarea');area.value=button.dataset.citation;area.rows=10;area.style.width='100%';dialog.append(area);const close=document.createElement('button');close.textContent='关闭';close.className='button';close.onclick=()=>{dialog.close();dialog.remove();};dialog.append(close);document.body.append(dialog);dialog.showModal();}}));
 })();
