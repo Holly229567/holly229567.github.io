@@ -3,9 +3,10 @@ import texmath from 'markdown-it-texmath';
 import katex from 'katex';
 import bibtex from './vendor/bibtex-parser.cjs';
 import {bibtexText} from './bibtex-text.mjs';
-import {COLLECTIONS,PROFILE_FIELDS,clone,newRecord,validateSite,REPOSITORY} from './content-model.mjs';
+import {COLLECTIONS,PROFILE_FIELDS,clone,newRecord,validateSite,validateUploads,REPOSITORY} from './content-model.mjs';
 import {GitHubStore} from './github-store.mjs';
 import {renderSite,escape,adminLink} from './render.mjs';
+import {LOCAL_MANAGER_ORIGIN,WEBSITE_ORIGIN,trustedMessage} from './local-handoff.mjs';
 
 const $=id=>document.getElementById(id), local=document.querySelector('meta[name="local-manager"]');
 const nonce=local?.content;
@@ -16,7 +17,7 @@ const sectionNames={overview:'概览',profile:'个人资料',...Object.fromEntri
 if(!sectionNames[section])section='overview';
 function notice(text,error=false){const target=$('manager-message');target.textContent=text;target.hidden=!text;target.className=error?'error-message':'success-message';}
 async function api(path,method='GET',body){const response=await fetch('/api/'+path,{method,headers:{'Content-Type':'application/json','X-Andrew-Manager':nonce},...(body?{body:JSON.stringify(body)}:{})});const result=await response.json();if(!response.ok)throw new Error(result.error||'本机管理服务暂时不可用。');return result;}
-function connection(text){$('connection-status').textContent=text;$('connect-button').textContent=mode?'重新加载':'连接 GitHub';}
+function connection(text){$('connection-status').textContent=text;$('connect-button').textContent=mode?'重新加载':local?'连接 GitHub':'打开已登录管理台';}
 function busyState(value){busy=value;for(const id of ['publish-button','connect-button','preview-site'])$(id).disabled=value;document.querySelectorAll('#manager-content input,#manager-content textarea,#manager-content select,#manager-content button').forEach(element=>element.disabled=value);$('publish-button').textContent=value?'正在处理…':'发布更新';if(!value&&state)render();}
 function draftDb(){return new Promise((resolve,reject)=>{const req=indexedDB.open('andrew-site-manager',1);req.onupgradeneeded=()=>req.result.createObjectStore('drafts');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);});}
 async function getDraft(){const db=await draftDb();return new Promise((resolve,reject)=>{const tx=db.transaction('drafts');const req=tx.objectStore('drafts').get(REPOSITORY);req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);tx.oncomplete=()=>db.close();});}
@@ -89,10 +90,40 @@ function bibDialog(){ $('dialog-content').innerHTML=`<div class="dialog-heading"
 $('bib-file').onchange=async event=>{const file=event.target.files[0];if(file&&$('bib-input'))$('bib-input').value=await file.text();event.target.value='';};
 async function reload(){if(dirty&&!confirm('重新加载将替换当前本机草稿。请先在备份页导出，是否继续？'))return;busyState(true);try{const result=local?await api('content'):store?await store.load():null;if(!result){$('connect-dialog').showModal();return;}state=result.state;baseSha=result.baseSha;pending.clear();rebuildPreviewUrls();dirty=false;mode=local?'local':'github';connection(local?'本机 GitHub 已连接':'GitHub 已连接');await saveDraft();render();notice('已读取 GitHub 最新内容。');}catch(error){notice(error.message,true);}finally{busyState(false);}}
 async function connectLocal(){busyState(true);try{const result=await api('content');if(!dirty){state=result.state;baseSha=result.baseSha;}mode='local';connection('本机 GitHub 已连接');notice(baseSha&&baseSha!==result.baseSha?'已连接。GitHub 内容已有更新，请备份草稿后重新加载。':'已连接本机 GitHub，可直接发布更新。');}catch(error){notice(error.message,true);}finally{busyState(false);}}
-$('connect-button').onclick=()=>mode?reload():local?connectLocal():$('connect-dialog').showModal();
+function openLocalManager(){
+  if(!captureForm())return;
+  const handoffNonce=crypto.randomUUID(),target=window.open(LOCAL_MANAGER_ORIGIN+'/admin/?section='+encodeURIComponent(section)+'#handoff='+handoffNonce,'_blank');
+  if(!target){notice('请允许打开管理台，或直接访问 '+LOCAL_MANAGER_ORIGIN+'/admin/。',true);return;}
+  let completed=false;
+  const listener=event=>{
+    if(trustedMessage(event,{source:target,origin:LOCAL_MANAGER_ORIGIN,nonce:handoffNonce,type:'andrew-manager-ready'}))target.postMessage({type:'andrew-manager-draft',nonce:handoffNonce,payload:{state,files:[...pending.values()],baseSha,dirty}},LOCAL_MANAGER_ORIGIN);
+    if(trustedMessage(event,{source:target,origin:LOCAL_MANAGER_ORIGIN,nonce:handoffNonce,type:'andrew-manager-received'})){
+      completed=true;window.removeEventListener('message',listener);$('connect-dialog').close();notice('已打开使用现有 GitHub 登录的管理台，网页草稿已保留。请在新页面点击「发布更新」。');
+    }
+  };
+  window.addEventListener('message',listener);
+  setTimeout(()=>{if(!completed){window.removeEventListener('message',listener);$('connect-dialog').showModal();notice('请先双击项目文件夹中的「管理网站.cmd」，再点击打开本机管理台。网页草稿已保留。',true);}},8000);
+}
+function receiveLocalDraft(){
+  const handoffNonce=new URLSearchParams(location.hash.slice(1)).get('handoff'),opener=window.opener;
+  if(!local||!opener||!handoffNonce)return;
+  const listener=async event=>{
+    if(!trustedMessage(event,{source:opener,origin:WEBSITE_ORIGIN,nonce:handoffNonce,type:'andrew-manager-draft'}))return;
+    try{
+      const incoming=event.data.payload;
+      if(incoming.dirty){validateSite(incoming.state);validateUploads(incoming.files||[]);if(dirty&&!confirm('是否导入网页草稿？当前本机草稿请先导出备份。'))return;
+        state=clone(incoming.state);baseSha=incoming.baseSha;pending=new Map((incoming.files||[]).map(file=>[file.path,file]));dirty=true;rebuildPreviewUrls();await saveDraft();render();}
+      notice(mode?'GitHub 已连接，网页草稿已就绪。点击「发布更新」即可上线。':'网页草稿已转入本机，点击连接 GitHub 后发布。');
+      opener.postMessage({type:'andrew-manager-received',nonce:handoffNonce},WEBSITE_ORIGIN);window.removeEventListener('message',listener);history.replaceState({},'',location.pathname+location.search);window.opener=null;
+    }catch(error){notice('网页草稿未导入：'+error.message,true);}
+  };
+  window.addEventListener('message',listener);opener.postMessage({type:'andrew-manager-ready',nonce:handoffNonce},WEBSITE_ORIGIN);
+}
+$('connect-button').onclick=()=>mode?reload():local?connectLocal():openLocalManager();
+$('use-local-manager').onclick=openLocalManager;
 $('connect-form').onsubmit=async event=>{event.preventDefault();const token=$('github-token').value.trim();if(!token){$('connect-message').hidden=false;$('connect-message').textContent='请填写访问令牌，或使用本机管理入口。';return;}try{const candidate=new GitHubStore(token),result=await candidate.load();store=candidate;mode='github';if(!dirty){baseSha=result.baseSha;state=result.state;}$('github-token').value='';$('connect-dialog').close();connection('GitHub 已连接');render();notice(baseSha!==result.baseSha?'已连接。GitHub 内容已有更新，请先备份草稿并重新加载。':'已连接，可以直接发布更新。');}catch(error){$('connect-message').hidden=false;$('connect-message').textContent=error.message;}};
 function captureForm(){const before=JSON.stringify(state),profile=$('profile-form'),appearance=$('appearance-form');if(profile){if(!profile.reportValidity())return false;const previous=state.profile.name;state.profile={...state.profile,...getFormValues(profile,PROFILE_FIELDS)};if(state.settings.title===previous||!state.settings.title)state.settings.title=state.profile.name;}if(appearance){if(!appearance.reportValidity())return false;state.settings={...state.settings,...getFormValues(appearance,appearanceFields),labels:Object.fromEntries(Object.keys(state.settings.labels).map(key=>[key,appearance.elements[key].value.trim()||state.settings.labels[key]]))};}if(JSON.stringify(state)!==before)changed();return true;}
-$('publish-button').onclick=async()=>{if(!captureForm())return;if(!mode){if(local){await connectLocal();if(!mode)return;}else{$('connect-dialog').showModal();return;}}try{validateSite(state);}catch(error){notice(error.message,true);return;}busyState(true);try{const candidate=clone(state);candidate.updatedAt=new Date().toISOString();const payload={state:candidate,baseSha,files:[...pending.values()]};const result=local?await api('publish','POST',payload):await store.publish(payload);state=candidate;baseSha=result.baseSha;pending.clear();dirty=false;await saveDraft();notice('更新已提交到 GitHub，网站正在自动发布。稍后刷新主页即可看到。');const anchor=document.createElement('a');anchor.href='https://github.com/'+REPOSITORY+'/actions';anchor.target='_blank';anchor.rel='noopener noreferrer';anchor.textContent=' 查看发布进度';$('manager-message').append(anchor);}catch(error){notice(error.message,true);}finally{busyState(false);}};
+$('publish-button').onclick=async()=>{if(!captureForm())return;if(!mode){if(local){await connectLocal();if(!mode)return;}else{openLocalManager();return;}}try{validateSite(state);}catch(error){notice(error.message,true);return;}busyState(true);try{const candidate=clone(state);candidate.updatedAt=new Date().toISOString();const payload={state:candidate,baseSha,files:[...pending.values()]};const result=local?await api('publish','POST',payload):await store.publish(payload);state=candidate;baseSha=result.baseSha;pending.clear();dirty=false;await saveDraft();notice('更新已提交到 GitHub，网站正在自动发布。稍后刷新主页即可看到。');const anchor=document.createElement('a');anchor.href='https://github.com/'+REPOSITORY+'/actions';anchor.target='_blank';anchor.rel='noopener noreferrer';anchor.textContent=' 查看发布进度';$('manager-message').append(anchor);}catch(error){notice(error.message,true);}finally{busyState(false);}};
 $('preview-site').onclick=previewWebsite;document.querySelectorAll('[data-close-dialog]').forEach(button=>button.onclick=()=>button.closest('dialog').close());
 window.addEventListener('beforeunload',event=>{if(dirty&&!draftStored||busy){event.preventDefault();event.returnValue='';}});
-try{const response=await fetch('/manager-data.json',{cache:'no-store'});if(!response.ok)throw new Error('无法加载网站配置。');const data=await response.json();state=validateSite(data.state);baseSha=data.baseSha;const draft=await getDraft().catch(()=>null);if(draft?.dirty){validateSite(draft.state);state=draft.state;pending=new Map((draft.files||[]).map(file=>[file.path,file]));baseSha=draft.baseSha||baseSha;dirty=true;rebuildPreviewUrls();notice('已恢复这台设备上的未发布草稿。');}render();if(local)await connectLocal();if(new URLSearchParams(location.search).get('new')==='1'&&COLLECTIONS[section])editRecord(section);}catch(error){notice(error.message,true);$('manager-content').innerHTML='<p>请刷新重试，或在 GitHub 检查网站数据。</p>';}
+try{const response=await fetch('/manager-data.json',{cache:'no-store'});if(!response.ok)throw new Error('无法加载网站配置。');const data=await response.json();state=validateSite(data.state);baseSha=data.baseSha;const draft=await getDraft().catch(()=>null);if(draft?.dirty){validateSite(draft.state);state=draft.state;pending=new Map((draft.files||[]).map(file=>[file.path,file]));baseSha=draft.baseSha||baseSha;dirty=true;rebuildPreviewUrls();notice('已恢复这台设备上的未发布草稿。');}connection(local?'正在连接本机 GitHub':'可使用这台电脑已有的 GitHub 登录');render();if(local)await connectLocal();receiveLocalDraft();if(new URLSearchParams(location.search).get('new')==='1'&&COLLECTIONS[section])editRecord(section);}catch(error){notice(error.message,true);$('manager-content').innerHTML='<p>请刷新重试，或在 GitHub 检查网站数据。</p>';}
