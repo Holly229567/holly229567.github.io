@@ -3,14 +3,50 @@
   "url": "https://holly229567.github.io",
   "repository": "Holly229567/holly229567.github.io",
   "profile": {
-    "name": "Andrew Zhou", "title": "", "institution": "", "email": "", "location": "", "avatar": "", "interests": [],
-    "github": "", "scholar": "", "orcid": "", "linkedin": "", "website": "", "about": "", "cv": "", "cvFile": ""
+    "name": "Andrew Zhou",
+    "title": "",
+    "institution": "",
+    "email": "",
+    "location": "",
+    "avatar": "",
+    "interests": [],
+    "github": "",
+    "scholar": "",
+    "orcid": "",
+    "linkedin": "",
+    "website": "",
+    "about": "",
+    "cv": "",
+    "cvFile": ""
   },
   "settings": {
-    "title": "Andrew Zhou", "description": "", "favicon": "", "defaultTheme": "light", "accent": "#a7793c", "showEmpty": true,
-    "homeProjects": true, "homePublications": true, "homeNews": true,
-    "labels": { "home": "关于", "publications": "论文", "projects": "项目", "blog": "博客", "cv": "简历" }
+    "title": "Andrew Zhou",
+    "description": "",
+    "favicon": "",
+    "defaultTheme": "light",
+    "accent": "#a7793c",
+    "showEmpty": true,
+    "homeProjects": true,
+    "homePublications": true,
+    "homeNews": true,
+    "labels": {
+      "home": "关于",
+      "publications": "论文",
+      "projects": "项目",
+      "blog": "博客",
+      "cv": "简历"
+    }
   },
-  "links": [], "news": [], "experience": [], "projects": [], "publications": [], "teaching": [], "awards": [], "services": [],
-  "posts": [], "pages": [], "media": [], "updatedAt": ""
+  "links": [],
+  "news": [],
+  "experience": [],
+  "projects": [],
+  "publications": [],
+  "teaching": [],
+  "awards": [],
+  "services": [],
+  "posts": [],
+  "pages": [],
+  "media": [],
+  "updatedAt": "2026-10-12T13:59:18.921Z"
 }
