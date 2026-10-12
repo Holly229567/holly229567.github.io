@@ -1,4 +1,5 @@
 export const REPOSITORY = 'Holly229567/holly229567.github.io';
+export const OWNER_ID = 164642264;
 export const COLLECTIONS = {
   links: { title: '联系与链接', singular: '链接', fields: [['title','链接名称','text',true],['url','链接地址','url',true]] },
   news: { title: '动态', singular: '动态', fields: [['date','日期','date'],['title','标题','text',true],['content','内容','markdown'],['url','链接','url']] },

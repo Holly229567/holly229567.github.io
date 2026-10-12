@@ -6,6 +6,7 @@ import {randomBytes} from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import {GitHubStore} from '../src/github-store.mjs';
 import {validateSite,validateUploads} from '../src/content-model.mjs';
+import {validManagerRequest} from '../src/manager-request.mjs';
 const root=path.resolve(fileURLToPath(new URL('..',import.meta.url)));process.chdir(root);
 await import('./build.mjs');
 const port=5192,origin='http://127.0.0.1:'+port,nonce=randomBytes(32).toString('hex');
@@ -22,7 +23,7 @@ const server=http.createServer(async(req,res)=>{
     const url=new URL(req.url,origin);
     if(url.pathname==='/api/health'){json(res,{service:'andrew-website-manager',version:2});return;}
     if(url.pathname.startsWith('/api/')){
-      if(req.headers['x-andrew-manager']!==nonce||req.method!=='GET'&&req.headers.origin!==origin){json(res,{error:'请求校验失败，请从本机管理页面操作。'},403);return;}
+      if(!validManagerRequest(req,{origin,nonce})){json(res,{error:'请求校验失败，请从本机管理页面操作。'},403);return;}
       if(url.pathname==='/api/content'&&req.method==='GET'){json(res,await github().load());return;}
       if(['/api/publish','/api/validate'].includes(url.pathname)&&req.method==='POST'){
         const data=await payload(req);validateSite(data.state);validateUploads(data.files||[]);for(const file of data.files||[])verifyFile(file);
